@@ -1,0 +1,29 @@
+# Tomato Classification Robot Control System - Requirements
+# For Raspberry Pi 4 with PyQt6
+
+# Core dependencies
+numpy>=1.21.0
+opencv-python>=4.5.0
+pyserial>=3.5
+
+# PyQt6 - Required
+PyQt6>=6.2.0
+PyQt6-Charts>=6.2.0
+PyQt6-sip>=13.2.0
+
+# TensorFlow for Raspberry Pi
+# For full TensorFlow (slower on RPi)
+# tensorflow>=2.10.0
+
+# For TensorFlow Lite (recommended for RPi)
+--extra-index-url https://google-coral.github.io/py-repo/
+tflite-runtime>=2.5.0
+
+# Additional dependencies
+h5py>=3.1.0
+pillow>=8.0.0
+picamera2>=0.3.12
+
+# Optional for development
+# ipython>=7.0.0
+# jupyter>=1.0.0
