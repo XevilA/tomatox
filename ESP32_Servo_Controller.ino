@@ -24,16 +24,16 @@ const char* ssid = "YourWiFiSSID";      // Change this
 const char* password = "YourWiFiPassword"; // Change this
 
 // Servo Configuration
-#define NUM_SERVOS 6
-const int servoPins[NUM_SERVOS] = {13, 12, 14, 27, 26, 25}; // GPIO pins for servos
+#define NUM_SERVOS 4
+const int servoPins[NUM_SERVOS] = {13, 12, 14, 27}; // GPIO pins for servos
 Servo servos[NUM_SERVOS];
-int servoPositions[NUM_SERVOS] = {90, 90, 90, 90, 90, 90}; // Current positions
+int servoPositions[NUM_SERVOS] = {90, 90, 90, 90}; // Current positions
 int servoMin = 500;   // Minimum pulse width in microseconds
 int servoMax = 2400;  // Maximum pulse width in microseconds
 
 // Servo names for reference
 const char* servoNames[NUM_SERVOS] = {
-  "Base", "Shoulder", "Elbow", "Wrist", "Rotation", "Gripper"
+  "Base", "Shoulder", "Elbow", "Gripper"
 };
 
 // Movement parameters
@@ -286,7 +286,7 @@ void moveAllServos(int targetAngles[], int speed) {
 }
 
 void handleGripper(String action) {
-  int gripperIndex = 5; // Gripper is the last servo
+  int gripperIndex = 3; // Gripper is the last servo (4th servo)
   
   if (action == "open") {
     moveServo(gripperIndex, 120, 30);
@@ -299,7 +299,7 @@ void handleGripper(String action) {
 }
 
 void homePosition() {
-  int homeAngles[NUM_SERVOS] = {90, 90, 90, 90, 90, 90};
+  int homeAngles[NUM_SERVOS] = {90, 90, 90, 90};
   moveAllServos(homeAngles, 30);
 }
 
@@ -320,34 +320,34 @@ void smartPick(String type, int force, String speed) {
   else if (speed == "very_slow") pickSpeed = 70;
   else if (speed == "fast") pickSpeed = 20;
   
-  // Example picking sequence
+  // Example picking sequence for 4 servos
   // 1. Move to approach position
-  int approachPos[NUM_SERVOS] = {90, 45, 135, 90, 90, 120};
+  int approachPos[NUM_SERVOS] = {90, 45, 135, 120};
   moveAllServos(approachPos, pickSpeed);
   delay(500);
   
   // 2. Move to pick position
-  int pickPos[NUM_SERVOS] = {90, 30, 150, 90, 90, 120};
+  int pickPos[NUM_SERVOS] = {90, 30, 150, 120};
   moveAllServos(pickPos, pickSpeed);
   delay(500);
   
   // 3. Close gripper with appropriate force
   int gripAngle = map(force, 0, 100, 30, 90);
-  moveServo(5, gripAngle, pickSpeed);
+  moveServo(3, gripAngle, pickSpeed);
   delay(500);
   
   // 4. Lift
-  int liftPos[NUM_SERVOS] = {90, 60, 120, 90, 90, gripAngle};
+  int liftPos[NUM_SERVOS] = {90, 60, 120, gripAngle};
   moveAllServos(liftPos, pickSpeed);
   delay(500);
   
   // 5. Move to basket
-  int basketPos[NUM_SERVOS] = {0, 90, 90, 90, 90, gripAngle};
+  int basketPos[NUM_SERVOS] = {0, 90, 90, gripAngle};
   moveAllServos(basketPos, pickSpeed);
   delay(500);
   
   // 6. Release
-  moveServo(5, 120, pickSpeed);
+  moveServo(3, 120, pickSpeed);
   delay(500);
   
   // 7. Return to home
@@ -360,16 +360,16 @@ void smartDiscard(String type) {
   // Implement discard sequence for rotten tomatoes
   // Similar to smartPick but moves to discard bin instead
   
-  // Example sequence
+  // Example sequence for 4 servos
   int discardSpeed = 50; // Gentle movement
   
   // Move to discard position
-  int discardPos[NUM_SERVOS] = {180, 90, 90, 90, 90, 120};
+  int discardPos[NUM_SERVOS] = {180, 90, 90, 120};
   moveAllServos(discardPos, discardSpeed);
   delay(500);
   
   // Release
-  moveServo(5, 120, discardSpeed);
+  moveServo(3, 120, discardSpeed);
   delay(500);
   
   // Return to home
