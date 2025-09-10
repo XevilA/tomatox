@@ -290,7 +290,7 @@ class ESP32ServoController(QObject):
         self.esp32_ip = "192.168.1.100"  # Default ESP32 IP
         self.esp32_port = 80
         self.connected = False
-        self.servo_positions = [90] * 6  # 6 servos, centered at 90 degrees
+        self.servo_positions = [90] * 4  # 4 servos, centered at 90 degrees
 
     def connect_serial(self, port: str, baudrate: int = 115200):
         """Connect to ESP32 via Serial"""
@@ -370,7 +370,7 @@ class ESP32ServoController(QObject):
 
     def move_servo(self, servo_id: int, angle: int, speed: int = 50):
         """Move a specific servo to angle"""
-        if not (0 <= servo_id <= 5):
+        if not (0 <= servo_id <= 3):  # Changed from 5 to 3 (0-3 for 4 servos)
             return False
         if not (0 <= angle <= 180):
             return False
@@ -390,7 +390,7 @@ class ESP32ServoController(QObject):
 
     def move_all_servos(self, angles: List[int], speed: int = 50):
         """Move all servos simultaneously"""
-        if len(angles) != 6:
+        if len(angles) != 4:  # Changed from 6 to 4
             return False
             
         command = {
@@ -781,9 +781,9 @@ class ServoControlWidget(QWidget):
         servo_layout = QGridLayout()
         
         self.servo_controls = []
-        servo_names = ["Base", "Shoulder", "Elbow", "Wrist", "Rotation", "Gripper"]
+        servo_names = ["Base", "Shoulder", "Elbow", "Gripper"]
         
-        for i in range(6):
+        for i in range(4):  # Changed from 6 to 4
             # Servo name
             name_label = QLabel(f"{servo_names[i]}:")
             servo_layout.addWidget(name_label, i, 0)
@@ -911,7 +911,7 @@ class ServoControlWidget(QWidget):
     
     def move_servo(self, servo_id: int, angle: int):
         """Move servo to specified angle"""
-        if 0 <= servo_id < 6:
+        if 0 <= servo_id < 4:  # Changed from 6 to 4
             # Update UI
             self.servo_controls[servo_id]['slider'].setValue(angle)
             self.servo_controls[servo_id]['dial'].setValue(angle)
@@ -922,7 +922,7 @@ class ServoControlWidget(QWidget):
     
     def update_servo_position(self, servo_id: int, position: int):
         """Update servo position display"""
-        if 0 <= servo_id < 6:
+        if 0 <= servo_id < 4:  # Changed from 6 to 4
             self.servo_controls[servo_id]['slider'].setValue(position)
             self.servo_controls[servo_id]['dial'].setValue(position)
             self.servo_controls[servo_id]['label'].setText(f"{position}°")
@@ -930,26 +930,26 @@ class ServoControlWidget(QWidget):
     def home_position(self):
         """Move to home position"""
         self.esp32.home_position()
-        for i in range(6):
+        for i in range(4):  # Changed from 6 to 4
             self.update_servo_position(i, 90)
     
     def pick_position(self):
         """Move to pick position"""
-        positions = [90, 45, 135, 90, 90, 30]  # Example pick position
+        positions = [90, 45, 135, 30]  # Example pick position for 4 servos
         self.esp32.move_all_servos(positions)
         for i, pos in enumerate(positions):
             self.update_servo_position(i, pos)
     
     def place_position(self):
         """Move to place position"""
-        positions = [0, 90, 90, 90, 90, 120]  # Example place position
+        positions = [0, 90, 90, 120]  # Example place position for 4 servos
         self.esp32.move_all_servos(positions)
         for i, pos in enumerate(positions):
             self.update_servo_position(i, pos)
     
     def scan_position(self):
         """Move to scan position"""
-        positions = [90, 60, 120, 45, 90, 90]  # Example scan position
+        positions = [90, 60, 120, 90]  # Example scan position for 4 servos
         self.esp32.move_all_servos(positions)
         for i, pos in enumerate(positions):
             self.update_servo_position(i, pos)
@@ -1391,17 +1391,17 @@ class AdvancedMainWindow(QMainWindow):
         base_angle = int(90 + (x - 320) * 0.1)  # Center at 320 pixels
         shoulder_angle = int(90 - (y - 240) * 0.1)  # Center at 240 pixels
         
-        # Move to position
-        positions = [base_angle, shoulder_angle, 135, 90, 90, 30]
+        # Move to position (4 servos)
+        positions = [base_angle, shoulder_angle, 135, 30]
         self.esp32_controller.move_all_servos(positions, speed=30)
         
         # Grip
         time.sleep(1)
         self.esp32_controller.gripper_action("grip")
         
-        # Move to place position
+        # Move to place position (4 servos)
         time.sleep(0.5)
-        place_positions = [0, 90, 90, 90, 90, 30]
+        place_positions = [0, 90, 90, 30]
         self.esp32_controller.move_all_servos(place_positions, speed=30)
         
         # Release
