@@ -2,6 +2,7 @@
 """
 Main Application - Tomato Harvesting System with Real-time Detection
 ESP32 Servo Control with Detection Frames
+Camera troubleshooting and test mode included
 """
 
 import sys
@@ -16,6 +17,7 @@ from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from dataclasses import dataclass
 import logging
+import platform  # For OS detection
 
 # PyQt6 imports
 from PyQt6.QtCore import (Qt, QThread, QTimer, pyqtSignal, QObject, 
@@ -23,7 +25,8 @@ from PyQt6.QtCore import (Qt, QThread, QTimer, pyqtSignal, QObject,
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QPushButton, QLabel, QComboBox,
                              QSlider, QGroupBox, QGridLayout, QFileDialog,
-                             QMessageBox, QTextEdit, QCheckBox, QSpinBox)
+                             QMessageBox, QTextEdit, QCheckBox, QSpinBox,
+                             QDialog, QDialogButtonBox, QListWidget)
 from PyQt6.QtGui import (QImage, QPixmap, QPainter, QPen, QColor, QFont,
                         QBrush)
 
@@ -39,6 +42,145 @@ try:
 except ImportError:
     TF_AVAILABLE = False
     logger.warning("TensorFlow not available. Install with: pip install tensorflow")
+
+
+class CameraTroubleshooter(QDialog):
+    """Dialog for camera troubleshooting"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Camera Troubleshooting")
+        self.setMinimumWidth(500)
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        # Title
+        title = QLabel("📷 Camera Troubleshooting Guide")
+        title.setStyleSheet("font-size: 16px; font-weight: bold; padding: 10px;")
+        layout.addWidget(title)
+        
+        # System info
+        info_group = QGroupBox("System Information")
+        info_layout = QVBoxLayout()
+        
+        os_info = f"Operating System: {platform.system()} {platform.release()}"
+        info_layout.addWidget(QLabel(os_info))
+        
+        opencv_info = f"OpenCV Version: {cv2.__version__}"
+        info_layout.addWidget(QLabel(opencv_info))
+        
+        info_group.setLayout(info_layout)
+        layout.addWidget(info_group)
+        
+        # Camera detection
+        detect_group = QGroupBox("Camera Detection")
+        detect_layout = QVBoxLayout()
+        
+        self.camera_list = QListWidget()
+        detect_layout.addWidget(self.camera_list)
+        
+        detect_btn = QPushButton("🔍 Detect Cameras")
+        detect_btn.clicked.connect(self.detect_cameras)
+        detect_layout.addWidget(detect_btn)
+        
+        detect_group.setLayout(detect_layout)
+        layout.addWidget(detect_group)
+        
+        # Common fixes
+        fixes_group = QGroupBox("Common Fixes")
+        fixes_layout = QVBoxLayout()
+        
+        fixes_text = QTextEdit()
+        fixes_text.setReadOnly(True)
+        fixes_text.setMaximumHeight(200)
+        fixes_text.setPlainText(
+            "1. Windows:\n"
+            "   • Check Device Manager for camera\n"
+            "   • Update camera drivers\n"
+            "   • Allow camera access in Settings → Privacy\n"
+            "   • Close other apps using camera (Zoom, Teams, etc.)\n\n"
+            "2. Linux:\n"
+            "   • Check permissions: sudo usermod -a -G video $USER\n"
+            "   • Install v4l-utils: sudo apt install v4l-utils\n"
+            "   • List devices: v4l2-ctl --list-devices\n"
+            "   • Test: cheese or guvcview\n\n"
+            "3. Mac:\n"
+            "   • Grant camera permission in System Preferences\n"
+            "   • Check Security & Privacy settings\n"
+            "   • Restart camera service\n\n"
+            "4. General:\n"
+            "   • Try different USB ports\n"
+            "   • Check cable connections\n"
+            "   • Restart computer\n"
+            "   • Use external USB camera"
+        )
+        fixes_layout.addWidget(fixes_text)
+        
+        fixes_group.setLayout(fixes_layout)
+        layout.addWidget(fixes_group)
+        
+        # Buttons
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
+        
+        self.setLayout(layout)
+        
+        # Auto-detect on open
+        self.detect_cameras()
+    
+    def detect_cameras(self):
+        """Detect available cameras"""
+        self.camera_list.clear()
+        
+        found_any = False
+        for i in range(10):  # Check first 10 indices
+            # Try different backends based on OS
+            if platform.system() == "Windows":
+                backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
+            elif platform.system() == "Linux":
+                backends = [cv2.CAP_V4L2, cv2.CAP_ANY]
+            else:  # Mac
+                backends = [cv2.CAP_AVFOUNDATION, cv2.CAP_ANY]
+            
+            for backend in backends:
+                try:
+                    cap = cv2.VideoCapture(i, backend)
+                    if cap.isOpened():
+                        # Try to get camera name
+                        backend_name = self.get_backend_name(backend)
+                        
+                        # Test read
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                            
+                            item_text = f"✅ Index {i} ({backend_name}): {w}x{h}"
+                            self.camera_list.addItem(item_text)
+                            found_any = True
+                            cap.release()
+                            break
+                        cap.release()
+                except Exception as e:
+                    pass
+        
+        if not found_any:
+            self.camera_list.addItem("❌ No cameras detected")
+            self.camera_list.addItem("Try the fixes above or use Test Mode")
+    
+    def get_backend_name(self, backend):
+        """Get backend name"""
+        backend_names = {
+            cv2.CAP_ANY: "Auto",
+            cv2.CAP_DSHOW: "DirectShow",
+            cv2.CAP_MSMF: "Media Foundation",
+            cv2.CAP_V4L2: "V4L2",
+            cv2.CAP_AVFOUNDATION: "AVFoundation"
+        }
+        return backend_names.get(backend, "Unknown")
 
 
 @dataclass
@@ -294,35 +436,185 @@ class TomatoDetector(QObject):
         return annotated_frame, detections
 
 
-class CameraThread(QThread):
-    """Camera capture thread"""
+class TestCameraThread(QThread):
+    """Test camera thread that generates synthetic frames"""
     frame_ready = pyqtSignal(np.ndarray)
     
     def __init__(self):
         super().__init__()
         self.running = False
-        self.cap = None
+        self.frame_count = 0
         
     def run(self):
-        """Main capture loop"""
+        """Generate test frames"""
         self.running = True
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         
         while self.running:
-            ret, frame = self.cap.read()
-            if ret:
-                self.frame_ready.emit(frame)
-            else:
-                logger.error("Failed to capture frame")
+            # Generate synthetic frame
+            frame = self.generate_test_frame()
+            self.frame_ready.emit(frame)
             time.sleep(0.033)  # ~30 FPS
     
+    def generate_test_frame(self):
+        """Generate a test frame with moving circles (tomatoes)"""
+        # Create blank frame
+        frame = np.ones((480, 640, 3), dtype=np.uint8) * 50  # Dark gray background
+        
+        # Add some text
+        cv2.putText(frame, "TEST MODE - No Camera", (150, 50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        
+        # Generate synthetic tomatoes
+        self.frame_count += 1
+        
+        # Tomato 1 - Unripe (green)
+        x1 = int(200 + 50 * np.sin(self.frame_count * 0.05))
+        y1 = int(200 + 30 * np.cos(self.frame_count * 0.05))
+        cv2.circle(frame, (x1, y1), 40, (0, 255, 0), -1)  # Green
+        cv2.putText(frame, "Unripe", (x1-25, y1-50),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Tomato 2 - Ripe (red)
+        x2 = int(400 + 40 * np.cos(self.frame_count * 0.03))
+        y2 = int(250 + 40 * np.sin(self.frame_count * 0.03))
+        cv2.circle(frame, (x2, y2), 45, (0, 0, 255), -1)  # Red
+        cv2.putText(frame, "Ripe", (x2-20, y2-55),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Tomato 3 - Rotten (brown)
+        x3 = int(320 + 60 * np.sin(self.frame_count * 0.04))
+        y3 = int(350 + 20 * np.cos(self.frame_count * 0.04))
+        cv2.circle(frame, (x3, y3), 35, (42, 42, 165), -1)  # Brown (BGR)
+        cv2.putText(frame, "Rotten", (x3-25, y3-45),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Add noise for realism
+        noise = np.random.randint(0, 10, frame.shape, dtype=np.uint8)
+        frame = cv2.add(frame, noise)
+        
+        # Add timestamp
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        cv2.putText(frame, timestamp, (10, 470),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        return frame
+    
     def stop(self):
-        """Stop capture"""
+        """Stop generation"""
+        self.running = False
+        self.wait()
+
+
+class CameraThread(QThread):
+    """Camera capture thread with error handling"""
+    frame_ready = pyqtSignal(np.ndarray)
+    error_occurred = pyqtSignal(str)
+    camera_connected = pyqtSignal(bool)
+    
+    def __init__(self, camera_index=0):
+        super().__init__()
+        self.running = False
+        self.cap = None
+        self.camera_index = camera_index
+        self.retry_count = 0
+        self.max_retries = 3
+        
+    def run(self):
+        """Main capture loop with error recovery"""
+        self.running = True
+        
+        # Try to initialize camera
+        if not self.initialize_camera():
+            self.error_occurred.emit("Failed to initialize camera")
+            self.camera_connected.emit(False)
+            return
+        
+        self.camera_connected.emit(True)
+        self.retry_count = 0
+        
+        while self.running:
+            try:
+                ret, frame = self.cap.read()
+                
+                if ret and frame is not None:
+                    self.frame_ready.emit(frame)
+                    self.retry_count = 0  # Reset retry count on success
+                else:
+                    self.retry_count += 1
+                    if self.retry_count > 10:  # After 10 failed frames
+                        logger.error("Camera disconnected, attempting to reconnect...")
+                        self.error_occurred.emit("Camera disconnected")
+                        
+                        # Try to reconnect
+                        if self.reconnect_camera():
+                            self.camera_connected.emit(True)
+                            self.retry_count = 0
+                        else:
+                            self.error_occurred.emit("Failed to reconnect camera")
+                            self.camera_connected.emit(False)
+                            break
+                
+                time.sleep(0.033)  # ~30 FPS
+                
+            except Exception as e:
+                logger.error(f"Camera error: {e}")
+                self.error_occurred.emit(str(e))
+                
+                # Try to recover
+                if self.running:
+                    time.sleep(1)
+                    if not self.reconnect_camera():
+                        break
+    
+    def initialize_camera(self):
+        """Initialize camera with multiple attempts"""
+        for i in range(self.max_retries):
+            try:
+                # Try different camera indices
+                for idx in [self.camera_index, 0, 1, 2]:
+                    logger.info(f"Trying camera index {idx}...")
+                    
+                    # Try with different backends
+                    for backend in [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]:
+                        self.cap = cv2.VideoCapture(idx, backend)
+                        
+                        if self.cap.isOpened():
+                            # Set camera properties
+                            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                            self.cap.set(cv2.CAP_PROP_FPS, 30)
+                            
+                            # Test read
+                            ret, frame = self.cap.read()
+                            if ret and frame is not None:
+                                logger.info(f"Camera initialized successfully on index {idx}")
+                                self.camera_index = idx
+                                return True
+                            else:
+                                self.cap.release()
+                
+                time.sleep(1)  # Wait before retry
+                
+            except Exception as e:
+                logger.error(f"Camera initialization error: {e}")
+        
+        return False
+    
+    def reconnect_camera(self):
+        """Attempt to reconnect camera"""
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+        
+        time.sleep(1)
+        return self.initialize_camera()
+    
+    def stop(self):
+        """Stop capture and cleanup"""
         self.running = False
         if self.cap:
             self.cap.release()
+            self.cap = None
         self.wait()
 
 
@@ -529,7 +821,39 @@ class MainWindow(QMainWindow):
         self.camera_thread = None
         self.current_frame = None
         self.auto_harvest = False
+        self.camera_index = 0
+        
+        # Test camera before UI
+        self.test_available_cameras()
+        
         self.init_ui()
+        
+    def test_available_cameras(self):
+        """Test which camera indices are available"""
+        self.available_cameras = []
+        
+        for i in range(5):  # Test first 5 indices
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    self.available_cameras.append(i)
+                    logger.info(f"Found camera at index {i}")
+                cap.release()
+        
+        if not self.available_cameras:
+            logger.warning("No cameras detected")
+            # Show warning dialog
+            QMessageBox.warning(None, "Camera Warning", 
+                               "No camera detected!\n\n"
+                               "Please check:\n"
+                               "1. Camera is connected\n"
+                               "2. Camera drivers are installed\n"
+                               "3. No other app is using the camera\n\n"
+                               "You can still use the app for servo control.")
+        else:
+            self.camera_index = self.available_cameras[0]
+            logger.info(f"Using camera index {self.camera_index}")
         
     def init_ui(self):
         """Initialize UI"""
@@ -589,9 +913,19 @@ class MainWindow(QMainWindow):
         # Camera controls
         cam_controls = QHBoxLayout()
         
+        # Camera selection
+        self.camera_combo = QComboBox()
+        self.update_camera_list()
+        cam_controls.addWidget(QLabel("Camera:"))
+        cam_controls.addWidget(self.camera_combo)
+        
         self.start_cam_btn = QPushButton("📷 Start Camera")
         self.start_cam_btn.clicked.connect(self.toggle_camera)
         cam_controls.addWidget(self.start_cam_btn)
+        
+        self.test_cam_btn = QPushButton("🔧 Test")
+        self.test_cam_btn.clicked.connect(self.test_camera)
+        cam_controls.addWidget(self.test_cam_btn)
         
         self.detection_btn = QPushButton("🔍 Detection: ON")
         self.detection_btn.setCheckable(True)
@@ -737,6 +1071,18 @@ class MainWindow(QMainWindow):
         # Status bar
         self.statusBar().showMessage("Ready")
         
+        # Menu bar
+        menubar = self.menuBar()
+        
+        # Help menu
+        help_menu = menubar.addMenu("Help")
+        
+        troubleshoot_action = help_menu.addAction("🔧 Camera Troubleshooting")
+        troubleshoot_action.triggered.connect(self.show_troubleshooter)
+        
+        about_action = help_menu.addAction("ℹ️ About")
+        about_action.triggered.connect(self.show_about)
+        
         # Connect detector
         self.detector.detection_complete.connect(self.handle_detection)
         
@@ -761,19 +1107,99 @@ class MainWindow(QMainWindow):
             else:
                 self.conn_status.setText("🔴 Failed")
     
+    def update_camera_list(self):
+        """Update camera dropdown list"""
+        self.camera_combo.clear()
+        
+        if self.available_cameras:
+            for idx in self.available_cameras:
+                self.camera_combo.addItem(f"Camera {idx}")
+        else:
+            self.camera_combo.addItem("No camera detected")
+            
+        # Add test video option
+        self.camera_combo.addItem("Test Video (Generated)")
+    
+    def test_camera(self):
+        """Test camera with a popup window"""
+        test_dialog = QMessageBox(self)
+        test_dialog.setWindowTitle("Camera Test")
+        test_dialog.setText("Testing camera...")
+        test_dialog.setStandardButtons(QMessageBox.StandardButton.Close)
+        
+        # Quick test
+        cam_idx = self.camera_combo.currentIndex()
+        if cam_idx < len(self.available_cameras):
+            test_idx = self.available_cameras[cam_idx]
+            cap = cv2.VideoCapture(test_idx)
+            
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    test_dialog.setText(f"✅ Camera {test_idx} is working!\n"
+                                      f"Resolution: {frame.shape[1]}x{frame.shape[0]}")
+                else:
+                    test_dialog.setText(f"❌ Camera {test_idx} cannot read frames")
+                cap.release()
+            else:
+                test_dialog.setText(f"❌ Cannot open camera {test_idx}")
+        else:
+            test_dialog.setText("Test mode - No real camera")
+        
+        test_dialog.exec()
+    
     def toggle_camera(self):
-        """Start/stop camera"""
+        """Start/stop camera with better error handling"""
         if self.camera_thread is None:
-            self.camera_thread = CameraThread()
+            # Get selected camera
+            cam_idx = self.camera_combo.currentIndex()
+            
+            if cam_idx < len(self.available_cameras):
+                # Real camera
+                camera_index = self.available_cameras[cam_idx]
+                self.camera_thread = CameraThread(camera_index)
+            else:
+                # Test mode - generate synthetic frames
+                self.camera_thread = TestCameraThread()
+            
+            # Connect signals
             self.camera_thread.frame_ready.connect(self.process_frame)
+            
+            if hasattr(self.camera_thread, 'error_occurred'):
+                self.camera_thread.error_occurred.connect(self.handle_camera_error)
+                self.camera_thread.camera_connected.connect(self.handle_camera_status)
+            
             self.camera_thread.start()
             self.start_cam_btn.setText("⏹️ Stop Camera")
-            self.statusBar().showMessage("Camera started")
+            self.statusBar().showMessage("Starting camera...")
         else:
             self.camera_thread.stop()
             self.camera_thread = None
             self.start_cam_btn.setText("📷 Start Camera")
             self.statusBar().showMessage("Camera stopped")
+    
+    def handle_camera_error(self, error_msg: str):
+        """Handle camera errors"""
+        logger.error(f"Camera error: {error_msg}")
+        self.statusBar().showMessage(f"Camera error: {error_msg}")
+        
+        # Show error dialog
+        QMessageBox.critical(self, "Camera Error", 
+                            f"Camera error occurred:\n{error_msg}\n\n"
+                            "Try:\n"
+                            "1. Check camera connection\n"
+                            "2. Close other camera apps\n"
+                            "3. Select different camera\n"
+                            "4. Use Test Video mode")
+    
+    def handle_camera_status(self, connected: bool):
+        """Handle camera connection status"""
+        if connected:
+            self.statusBar().showMessage("Camera connected successfully")
+            self.capture_btn.setEnabled(True)
+        else:
+            self.statusBar().showMessage("Camera disconnected")
+            self.capture_btn.setEnabled(False)
     
     def process_frame(self, frame: np.ndarray):
         """Process camera frame"""
@@ -892,6 +1318,28 @@ class MainWindow(QMainWindow):
         positions = [90, 60, 120, 90]
         for i, angle in enumerate(positions):
             self.servo_sliders[i].setValue(angle)
+    
+    def show_troubleshooter(self):
+        """Show camera troubleshooting dialog"""
+        dialog = CameraTroubleshooter(self)
+        dialog.exec()
+        
+        # Refresh camera list after troubleshooting
+        self.test_available_cameras()
+        self.update_camera_list()
+    
+    def show_about(self):
+        """Show about dialog"""
+        QMessageBox.about(self, "About",
+                         "🍅 Tomato Harvesting System\n\n"
+                         "Version: 1.0.0\n"
+                         "Real-time detection and harvesting\n\n"
+                         "Features:\n"
+                         "• AI-powered tomato detection\n"
+                         "• ESP32 servo control\n"
+                         "• Auto-harvesting mode\n"
+                         "• Test mode for no camera\n\n"
+                         "Created with PyQt6 & OpenCV")
     
     def capture_image(self):
         """Capture current frame"""
